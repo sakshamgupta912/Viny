@@ -1,0 +1,42 @@
+|-- .bevel
+    |-- do_not_share
+        |-- port
+|-- .env.local
+|-- .gitignore
+|-- AGENTS.md
+|-- CLAUDE.md
+|-- eslint.config.mjs
+|-- LICENSE
+|-- next-env.d.ts
+|-- next.config.ts
+|-- package-lock.json
+|-- package.json
+|-- postcss.config.mjs
+|-- public
+    |-- file.svg
+    |-- globe.svg
+    |-- next.svg
+    |-- vercel.svg
+    |-- window.svg
+|-- README.md
+|-- src
+    |-- app
+        |-- api
+            |-- auth
+                |-- callback
+                    |-- spotify
+                        |-- route.ts
+            |-- spotify
+                |-- callback
+                |-- login
+                    |-- route.ts
+                |-- logout
+                    |-- route.ts
+                |-- now-playing
+                    |-- route.ts
+        |-- favicon.ico
+        |-- globals.css
+        |-- icon.svg
+        |-- layout.tsx
+        |-- page.tsx
+|-- tsconfig.json
