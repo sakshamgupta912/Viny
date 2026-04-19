@@ -20,30 +20,28 @@
 
 **Viny** brings the nostalgic aesthetic of a vinyl record player to your screen. Connect your Spotify account and watch your currently playing track come to life — complete with album art, dominant color extraction, and a spinning vinyl animation.
 
-<img width="1919" height="1199" alt="image" src="https://github.com/user-attachments/assets/10fc813e-a548-4a59-83fb-b97bc14f896d" />
-
+![Example Photo](public/example.png)
 
 ## 🚀 Features
 
 - 🎧 **Spotify Integration** — Real-time now-playing data via Spotify Web API
 - 🎨 **Dynamic Theming** — Extracts dominant colors from album art for a vibrant, adaptive UI
-- 💿 **Vinyl Animation** — Smooth spinning record visualization
-- ⚡ **Built with Next.js 16** — App Router, server components, and API routes
+- 💿 **Vinyl Animation** — Smooth spinning record with tonearm tracking
+- ⏯️ **Playback Controls** — Play, pause, skip, and previous track directly from the UI
+- 🖥️ **Fullscreen Mode** — Immersive full-screen visualizer
+- 🖼️ **Animated Album Background** — Subtle floating album art animation behind the turntable
+- ⚡ **Smart Polling** — Efficient API usage with adaptive polling near track transitions
 - 🎯 **Fully Typed** — End-to-end TypeScript
-
-## 📸 Preview
-
-> Connect your Spotify account and start playing a track to see Viny in action!
 
 ## 🛠️ Tech Stack
 
-| Technology | Purpose |
-|:--|:--|
-| **Next.js 16** | Framework & API routes |
-| **React 19** | UI rendering |
-| **Tailwind CSS 4** | Styling |
-| **TypeScript 5** | Type safety |
-| **Spotify Web API** | Music data |
+| Technology                | Purpose                |
+| :------------------------ | :--------------------- |
+| **Next.js 16**      | Framework & API routes |
+| **React 19**        | UI rendering           |
+| **Tailwind CSS 4**  | Styling                |
+| **TypeScript 5**    | Type safety            |
+| **Spotify Web API** | Music data             |
 
 ## 📦 Getting Started
 
@@ -56,12 +54,19 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/viny.git
-cd viny
+git clone https://github.com/sakshamgupta912/Viny.git
+cd Viny
 
 # Install dependencies
 npm install
 ```
+
+### Spotify Setup
+
+1. Go to the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
+2. Create a new application
+3. Add `http://localhost:3000/api/auth/callback/spotify` as a **Redirect URI** in your app settings
+4. Copy your **Client ID** and **Client Secret**
 
 ### Environment Variables
 
@@ -80,7 +85,7 @@ SPOTIFY_REDIRECT_URI=http://localhost:3000/api/auth/callback/spotify
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to see Viny in action.
+Open [http://localhost:3000](http://localhost:3000) and click **Connect Spotify** to get started.
 
 ## 📁 Project Structure
 
@@ -90,13 +95,13 @@ src/
 │   ├── layout.tsx          # Root layout
 │   ├── page.tsx            # Main vinyl visualizer
 │   ├── globals.css         # Global styles
-│   ├── favicon.ico         # App icon
 │   └── api/
 │       ├── auth/callback/spotify/   # OAuth callback
 │       └── spotify/
 │           ├── login/               # Spotify login
 │           ├── logout/              # Spotify logout
-│           └── now-playing/         # Now playing endpoint
+│           ├── now-playing/         # Now playing endpoint
+│           └── player/              # Playback controls (play/pause/next/prev)
 public/                     # Static assets
 ```
 

@@ -114,6 +114,7 @@ export default function Home() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const prevProgressRef = useRef(0);
   const menuRef = useRef<HTMLDivElement>(null);
+  const actionCooldownRef = useRef(0);
 
   // Sync fullscreen state with browser
   useEffect(() => {
@@ -145,6 +146,8 @@ export default function Home() {
   const fetchInFlight = useRef(false);
   const fetchNowPlaying = useCallback(async () => {
     if (fetchInFlight.current) return;
+    // Skip fetches during action cooldown to preserve optimistic UI
+    if (Date.now() < actionCooldownRef.current) return;
     fetchInFlight.current = true;
     try {
       const res = await fetch("/api/spotify/now-playing");
@@ -194,13 +197,19 @@ export default function Home() {
   const handlePlayerAction = useCallback(async (action: "play" | "pause" | "next" | "previous") => {
     if (controlBusy) return;
     setControlBusy(true);
+    // Optimistic UI update
+    if (action === "pause") setIsPlaying(false);
+    else if (action === "play") setIsPlaying(true);
+    // Block polls from overriding optimistic state for 1.5s
+    actionCooldownRef.current = Date.now() + 1500;
     try {
       await fetch("/api/spotify/player", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action }),
       });
-      setTimeout(fetchNowPlaying, 300);
+      // Re-fetch after cooldown to sync with actual Spotify state
+      setTimeout(fetchNowPlaying, 1500);
     } catch { /* ignore */ }
     finally { setControlBusy(false); }
   }, [controlBusy, fetchNowPlaying]);
@@ -214,15 +223,38 @@ export default function Home() {
     setTrack(DEFAULT_TRACK);
   };
 
-  // Initial fetch + poll every 3 seconds
+  // Smart polling — 3s normally, 1s when track is about to end (<5s remaining)
+  const nearEndRef = useRef(false);
+  const [nearEnd, setNearEnd] = useState(false);
+  useEffect(() => {
+    if (!isPlaying || !duration) {
+      if (nearEndRef.current) {
+        nearEndRef.current = false;
+        setNearEnd(false);
+      }
+      return;
+    }
+    const check = setInterval(() => {
+      const remaining = duration - (lastFetchedProgress + (Date.now() - lastFetchTime));
+      const isNear = remaining < 5000;
+      if (isNear !== nearEndRef.current) {
+        nearEndRef.current = isNear;
+        setNearEnd(isNear);
+      }
+    }, 500);
+    return () => clearInterval(check);
+  }, [isPlaying, duration, lastFetchedProgress, lastFetchTime]);
+
   useEffect(() => {
     const timeout = setTimeout(fetchNowPlaying, 0);
-    const interval = setInterval(fetchNowPlaying, 3000);
+    const interval = setInterval(() => {
+      fetchNowPlaying();
+    }, nearEnd ? 1000 : 3000);
     return () => {
       clearTimeout(timeout);
       clearInterval(interval);
     };
-  }, [fetchNowPlaying]);
+  }, [fetchNowPlaying, nearEnd]);
 
   // Extract dominant color from album art when it changes
   useEffect(() => {
@@ -651,6 +683,17 @@ export default function Home() {
                 </svg>
                 Log out
               </button>
+              <a
+                  href="https://github.com/sakshamgupta912"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2.5 border-t border-white/5 flex items-center justify-center gap-2 text-xs text-white/30 hover:text-white/50 transition-colors w-full"
+                >
+                  <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+                  </svg>
+                  Made by Saksham Gupta
+                </a>
             </div>
           )}
         </div>

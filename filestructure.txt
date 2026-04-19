@@ -3,6 +3,8 @@
 |-- AGENTS.md
 |-- CLAUDE.md
 |-- eslint.config.mjs
+|-- image
+    |-- README
 |-- LICENSE
 |-- next-env.d.ts
 |-- next.config.ts
@@ -10,6 +12,7 @@
 |-- package.json
 |-- postcss.config.mjs
 |-- public
+    |-- example.png
     |-- file.svg
     |-- globe.svg
     |-- next.svg
