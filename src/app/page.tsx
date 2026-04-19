@@ -110,7 +110,6 @@ export default function Home() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [themeColor, setThemeColor] = useState("#b829e3");
   const [tonearmFast, setTonearmFast] = useState(false);
-  const [controlBusy, setControlBusy] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const prevProgressRef = useRef(0);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -194,25 +193,27 @@ export default function Home() {
     }
   }, []);
 
+  const actionDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handlePlayerAction = useCallback(async (action: "play" | "pause" | "next" | "previous") => {
-    if (controlBusy) return;
-    setControlBusy(true);
-    // Optimistic UI update
+    // Optimistic UI update immediately
     if (action === "pause") setIsPlaying(false);
     else if (action === "play") setIsPlaying(true);
-    // Block polls from overriding optimistic state for 1.5s
+    // Extend cooldown on every click so polls don't override
     actionCooldownRef.current = Date.now() + 1500;
-    try {
-      await fetch("/api/spotify/player", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
-      });
+    // Debounce the actual API call — only the last action within 300ms fires
+    if (actionDebounceRef.current) clearTimeout(actionDebounceRef.current);
+    actionDebounceRef.current = setTimeout(async () => {
+      try {
+        await fetch("/api/spotify/player", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action }),
+        });
+      } catch { /* ignore */ }
       // Re-fetch after cooldown to sync with actual Spotify state
-      setTimeout(fetchNowPlaying, 1500);
-    } catch { /* ignore */ }
-    finally { setControlBusy(false); }
-  }, [controlBusy, fetchNowPlaying]);
+      setTimeout(fetchNowPlaying, 1200);
+    }, 300);
+  }, [fetchNowPlaying]);
 
   const handleLogout = async () => {
     setShowUserMenu(false);
