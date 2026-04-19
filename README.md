@@ -20,6 +20,9 @@
 
 **Viny** brings the nostalgic aesthetic of a vinyl record player to your screen. Connect your Spotify account and watch your currently playing track come to life — complete with album art, dominant color extraction, and a spinning vinyl animation.
 
+<img width="1919" height="1199" alt="image" src="https://github.com/user-attachments/assets/10fc813e-a548-4a59-83fb-b97bc14f896d" />
+
+
 ## 🚀 Features
 
 - 🎧 **Spotify Integration** — Real-time now-playing data via Spotify Web API
