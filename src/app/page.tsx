@@ -109,7 +109,26 @@ export default function Home() {
   const [lastFetchTime, setLastFetchTime] = useState(0);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [themeColor, setThemeColor] = useState("#b829e3");
+  const [tonearmFast, setTonearmFast] = useState(false);
+  const [controlBusy, setControlBusy] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const prevProgressRef = useRef(0);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // Sync fullscreen state with browser
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen();
+    } else {
+      document.exitFullscreen();
+    }
+  }, []);
 
   // Close menu on outside click
   useEffect(() => {
@@ -123,7 +142,10 @@ export default function Home() {
   }, []);
 
   // Poll Spotify for currently playing track
+  const fetchInFlight = useRef(false);
   const fetchNowPlaying = useCallback(async () => {
+    if (fetchInFlight.current) return;
+    fetchInFlight.current = true;
     try {
       const res = await fetch("/api/spotify/now-playing");
       if (res.status === 401) {
@@ -163,9 +185,25 @@ export default function Home() {
         }
       }
     } catch {
-      setAuthenticated(false);
+      // Network error — don't flip auth state, just skip this poll
+    } finally {
+      fetchInFlight.current = false;
     }
   }, []);
+
+  const handlePlayerAction = useCallback(async (action: "play" | "pause" | "next" | "previous") => {
+    if (controlBusy) return;
+    setControlBusy(true);
+    try {
+      await fetch("/api/spotify/player", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      setTimeout(fetchNowPlaying, 300);
+    } catch { /* ignore */ }
+    finally { setControlBusy(false); }
+  }, [controlBusy, fetchNowPlaying]);
 
   const handleLogout = async () => {
     setShowUserMenu(false);
@@ -210,9 +248,20 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [isPlaying, duration, lastFetchedProgress, lastFetchTime]);
 
-  // Calculate physical tonearm tracking angle
-  // Rest dock: 12deg | Start of record: 22deg | End of record (inner groove): 40deg
-  const tonearmAngle = isPlaying ? 22 + (progress / 100) * 18 : 12;
+  // Detect large progress jumps (seek or song change) for fast tonearm snap
+  useEffect(() => {
+    const delta = Math.abs(progress - prevProgressRef.current);
+    if (delta > 5) {
+      setTonearmFast(true);
+      const timer = setTimeout(() => setTonearmFast(false), 400);
+      return () => clearTimeout(timer);
+    }
+    prevProgressRef.current = progress;
+  }, [progress]);
+
+  // Calculate physical tonearm tracking angle (mimics real vinyl playback)
+  // Rest dock: 2deg | Outer groove (song start): 10deg | Inner groove (song end): 28deg
+  const tonearmAngle = isPlaying ? 10 + (progress / 100) * 18 : 2;
 
   return (
     <div className="relative w-full h-screen overflow-hidden bg-[#050505] text-white font-sans flex items-center justify-center">
@@ -291,12 +340,19 @@ export default function Home() {
       </div>
 
       <div
-        className="absolute left-1/2 top-1/2 z-0 pointer-events-none transition-transform duration-3000 ease-out"
+        className="absolute left-1/2 top-1/2 z-0 pointer-events-none"
         style={{
           width: "min(80vw, 800px)",
           height: "min(80vw, 800px)",
-          transform: `translate(-65%, -55%) ${isPlaying ? "rotate(-6deg) scale(1)" : "rotate(-10deg) scale(0.95)"}`,
-          opacity: 0.15,
+          transform: "translate(-65%, -55%) rotate(-6deg) scale(1)",
+          opacity: 0.25,
+          animationName: "album-float",
+          animationDuration: "20s",
+          animationTimingFunction: "ease-in-out",
+          animationIterationCount: "infinite",
+          animationDirection: "alternate",
+          animationFillMode: "forwards",
+          animationPlayState: isPlaying ? "running" : "paused",
         }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -307,13 +363,13 @@ export default function Home() {
         />
       </div>
 
-      <div className="absolute inset-0 z-0 bg-[radial-gradient(circle_at_center,transparent_0%,#050505_85%)] opacity-100 pointer-events-none" />
+      <div className="absolute inset-0 z-0 bg-[radial-gradient(circle_at_center,transparent_0%,#050505_85%)] opacity-80 pointer-events-none" />
 
       {/* 2. The Centerpiece: Massive Minimalist Turntable */}
       <div
-        className="relative z-10 p-4 md:p-8 rounded-full md:rounded-[4rem] bg-white/2 backdrop-blur-3xl border border-white/2 shadow-[0_0_100px_rgba(0,0,0,0.8)] flex items-center justify-center group transition-transform duration-500 hover:scale-[1.02]"
+        className="relative z-10 p-5 md:p-10 pb-3 md:pb-6 rounded-4xl md:rounded-[4rem] bg-white/2 backdrop-blur-3xl border border-white/2 shadow-[0_0_100px_rgba(0,0,0,0.8)] flex flex-col items-center justify-center group transition-transform duration-500 hover:scale-[1.02]"
       >
-        <div className="absolute inset-0 rounded-[4rem] bg-white/0 group-hover:bg-white/1 transition-colors duration-500 pointer-events-none" />
+        <div className="absolute inset-0 rounded-4xl md:rounded-[4rem] bg-white/0 group-hover:bg-white/1 transition-colors duration-500 pointer-events-none" />
 
         <div className="relative group perspective-1000">
           {/* Metallic Platter Rim */}
@@ -382,7 +438,7 @@ export default function Home() {
             </div>
 
             {/* Spindle */}
-            <div className="absolute w-4 h-4 md:w-5 md:h-5 bg-linear-to-br from-gray-300 to-gray-600 rounded-full border border-black shadow-[0_2px_4px_rgba(0,0,0,0.5)] z-20" />
+            <div className="absolute w-3 h-3 md:w-3.5 md:h-3.5 bg-linear-to-br bg-red-50 rounded-full border-[0.5px] border-black shadow-[0_2px_4px_rgba(0,0,0,0.5)] z-20" />
           </div>
 
           {/* Stationary Anisotropic Highlights */}
@@ -417,10 +473,10 @@ export default function Home() {
 
             {/* Tracking Arm */}
             <div
-              className="absolute top-10 right-4 md:top-16 md:right-0 w-3 h-48 md:w-4 md:h-88 origin-top transition-transform duration-1500 z-30"
+              className="absolute top-10 right-4 md:top-16 md:right-0 w-3 h-48 md:w-4 md:h-88 origin-top z-30"
               style={{
                 transform: `rotate(${tonearmAngle}deg)`,
-                transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
+                transition: `transform ${!isPlaying ? "1.2s" : tonearmFast ? "0.4s" : "3s"} cubic-bezier(0.25, 0.1, 0.25, 1)`,
               }}
             >
               {/* Rod */}
@@ -454,10 +510,54 @@ export default function Home() {
             </div>
           </div>
         </div>
+
+        {/* Playback Controls */}
+        {authenticated === true && (
+          <div className="relative z-40 flex items-center justify-center gap-6 md:gap-8 mt-3 md:mt-5">
+            {/* Previous */}
+            <button
+              onClick={() => handlePlayerAction("previous")}
+              className="text-white/30 hover:text-white/70 transition-colors duration-300"
+              aria-label="Previous track"
+            >
+              <svg className="w-4 h-4 md:w-5 md:h-5" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+              </svg>
+            </button>
+
+            {/* Play / Pause */}
+            <button
+              onClick={() => handlePlayerAction(isPlaying ? "pause" : "play")}
+              className="text-white/40 hover:text-white/80 transition-colors duration-300"
+              aria-label={isPlaying ? "Pause" : "Play"}
+            >
+              {isPlaying ? (
+                <svg className="w-5 h-5 md:w-6 md:h-6" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                </svg>
+              ) : (
+                <svg className="w-5 h-5 md:w-6 md:h-6" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M8 5v14l11-7z"/>
+                </svg>
+              )}
+            </button>
+
+            {/* Next */}
+            <button
+              onClick={() => handlePlayerAction("next")}
+              className="text-white/30 hover:text-white/70 transition-colors duration-300"
+              aria-label="Next track"
+            >
+              <svg className="w-4 h-4 md:w-5 md:h-5" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+              </svg>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 3. Minimalist Track Information */}
-      <div className="absolute bottom-8 left-8 md:bottom-16 md:left-16 z-20 flex flex-col max-w-2xl pointer-events-none">
+      <div className="absolute bottom-6 left-8 md:bottom-10 md:left-16 z-20 flex flex-col max-w-2xl pointer-events-none">
         {authenticated === true && !isPlaying && (
           <>
             <div className="flex items-center gap-2 mb-4 opacity-50">
@@ -556,6 +656,23 @@ export default function Home() {
         </div>
       )}
 
+      {/* Fullscreen Toggle */}
+      <button
+        onClick={toggleFullscreen}
+        className="absolute bottom-6 right-6 md:bottom-10 md:right-10 z-20 text-white/20 hover:text-white/60 transition-colors duration-300"
+        aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+      >
+        {isFullscreen ? (
+          <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9.00001 18.0001L9.00001 17.0001C9.00001 15.8956 8.10458 15.0001 7.00001 15.0001H6.00001M15 18.0001V17.0001C15 15.8956 15.8954 15.0001 17 15.0001L18 15.0001M9 6.00012L9 7.00012C9 8.10469 8.10457 9.00012 7 9.00012L6 9.00012M15 6.00014L15 7.00014C15 8.10471 15.8954 9.00014 17 9.00014L18 9.00014"/>
+          </svg>
+        ) : (
+          <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M6 15V16C6 17.1046 6.89543 18 8 18H9M18 15V16C18 17.1046 17.1046 18 16 18H15M6 9V8C6 6.89543 6.89543 6 8 6H9M18 9V8C18 6.89543 17.1046 6 16 6H15"/>
+          </svg>
+        )}
+      </button>
+
       <style
         dangerouslySetInnerHTML={{
           __html: `
@@ -571,6 +688,12 @@ export default function Home() {
         @keyframes kenburns-3 {
           0% { transform: scale(1.0) translate(0%, 0%) rotate(0deg); }
           100% { transform: scale(1.2) translate(3%, 5%) rotate(-2deg); }
+        }
+        @keyframes album-float {
+          0% { transform: translate(-65%, -55%) rotate(-6deg) scale(1); }
+          33% { transform: translate(-63%, -57%) rotate(-4deg) scale(1.03); }
+          66% { transform: translate(-67%, -53%) rotate(-8deg) scale(1.01); }
+          100% { transform: translate(-64%, -56%) rotate(-5deg) scale(1.04); }
         }
         @keyframes eq-1 { 0%, 100% { height: 6px; } 50% { height: 16px; } }
         @keyframes eq-2 { 0%, 100% { height: 16px; } 50% { height: 6px; } }

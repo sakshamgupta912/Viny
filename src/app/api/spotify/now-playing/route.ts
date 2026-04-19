@@ -114,8 +114,8 @@ export async function GET(request: NextRequest) {
 
   let res = await fetchNowPlaying(accessToken || "");
 
-  // Token expired — try refresh
-  if (res.status === 401 && refreshToken) {
+  // Token expired or rejected — try refresh
+  if ((res.status === 401 || res.status === 403) && refreshToken) {
     const refreshed = await refreshAccessToken(refreshToken);
     if (!refreshed) {
       return NextResponse.json({ authenticated: false }, { status: 401 });
@@ -127,9 +127,11 @@ export async function GET(request: NextRequest) {
 
     // Build response with refreshed cookie
     const trackData =
-      res.status === 204 || !res.ok
+      res.status === 204
         ? { isPlaying: false, lastPlayed: await fetchRecentlyPlayed(accessToken!) }
-        : parseTrackData(await res.json());
+        : res.ok
+          ? parseTrackData(await res.json())
+          : { isPlaying: false, lastPlayed: await fetchRecentlyPlayed(accessToken!) };
 
     const response = NextResponse.json({ ...trackData, user });
     response.cookies.set("spotify_access_token", accessToken!, {
@@ -151,7 +153,51 @@ export async function GET(request: NextRequest) {
     return response;
   }
 
-  if (res.status === 204 || !res.ok) {
+  // Nothing currently playing
+  if (res.status === 204) {
+    const user = await fetchUserProfile(accessToken!);
+    const lastPlayed = await fetchRecentlyPlayed(accessToken!);
+    return NextResponse.json({ isPlaying: false, user, lastPlayed });
+  }
+
+  // Other Spotify errors (429 rate limit, 5xx, etc.) — attempt refresh if possible
+  if (!res.ok && refreshToken) {
+    const refreshed = await refreshAccessToken(refreshToken);
+    if (refreshed) {
+      accessToken = refreshed.access_token;
+      const retryRes = await fetchNowPlaying(accessToken!);
+      const user = await fetchUserProfile(accessToken!);
+
+      const trackData =
+        retryRes.status === 204
+          ? { isPlaying: false, lastPlayed: await fetchRecentlyPlayed(accessToken!) }
+          : retryRes.ok
+            ? parseTrackData(await retryRes.json())
+            : { isPlaying: false, lastPlayed: await fetchRecentlyPlayed(accessToken!) };
+
+      const response = NextResponse.json({ ...trackData, user });
+      response.cookies.set("spotify_access_token", accessToken!, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: refreshed.expires_in,
+        path: "/",
+      });
+      if (refreshed.refresh_token) {
+        response.cookies.set("spotify_refresh_token", refreshed.refresh_token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
+          maxAge: 60 * 60 * 24 * 30,
+          path: "/",
+        });
+      }
+      return response;
+    }
+  }
+
+  // Non-OK response with no refresh token — return not playing rather than breaking
+  if (!res.ok) {
     const user = await fetchUserProfile(accessToken!);
     const lastPlayed = await fetchRecentlyPlayed(accessToken!);
     return NextResponse.json({ isPlaying: false, user, lastPlayed });

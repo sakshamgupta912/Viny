@@ -1,6 +1,3 @@
-|-- .bevel
-    |-- do_not_share
-        |-- port
 |-- .env.local
 |-- .gitignore
 |-- AGENTS.md
@@ -33,6 +30,8 @@
                 |-- logout
                     |-- route.ts
                 |-- now-playing
+                    |-- route.ts
+                |-- player
                     |-- route.ts
         |-- favicon.ico
         |-- globals.css
